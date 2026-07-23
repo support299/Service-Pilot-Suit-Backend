@@ -104,21 +104,41 @@ ASGI_APPLICATION = "config.asgi.application"
 # ─────────────────────────────────────────────────────────────
 # Database
 # ─────────────────────────────────────────────────────────────
-# Prefer DATABASE_URL when set; otherwise discrete NAME/USER/PASSWORD/HOST
-# (also accepts POSTGRES_* aliases).
+# Prefer DATABASE_URL when set; otherwise discrete DB_* vars.
+# Do NOT use bare USER/NAME/HOST — OS exports USER=ubuntu on Linux and
+# django-environ will prefer that over .env (breaks RDS auth).
 if env("DATABASE_URL", default=""):
     DATABASES = {"default": env.db("DATABASE_URL")}
 else:
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.postgresql",
-            "NAME": env("NAME", default=env("POSTGRES_DB", default="service_pilot_suite")),
-            "USER": env("USER", default=env("POSTGRES_USER", default="postgres")),
-            "PASSWORD": env("PASSWORD", default=env("POSTGRES_PASSWORD", default="")),
-            "HOST": env("HOST", default=env("POSTGRES_HOST", default="localhost")),
-            "PORT": env("PORT", default=env("POSTGRES_PORT", default="5432")),
+            "NAME": env(
+                "DB_NAME",
+                default=env("POSTGRES_DB", default=env("NAME", default="service_pilot_suite")),
+            ),
+            "USER": env(
+                "DB_USER",
+                default=env("POSTGRES_USER", default="postgres"),
+            ),
+            "PASSWORD": env(
+                "DB_PASSWORD",
+                default=env("POSTGRES_PASSWORD", default=env("PASSWORD", default="")),
+            ),
+            "HOST": env(
+                "DB_HOST",
+                default=env("POSTGRES_HOST", default=env("HOST", default="localhost")),
+            ),
+            "PORT": env(
+                "DB_PORT",
+                default=env("POSTGRES_PORT", default=env("PORT", default="5432")),
+            ),
         }
     }
+_sslmode = env("DB_SSLMODE", default="")
+if _sslmode:
+    DATABASES["default"].setdefault("OPTIONS", {})
+    DATABASES["default"]["OPTIONS"]["sslmode"] = _sslmode
 DATABASES["default"].setdefault("CONN_MAX_AGE", 60)
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
