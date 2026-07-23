@@ -106,6 +106,17 @@ class Membership(BaseModel):
         related_name="memberships",
     )
     is_active = models.BooleanField(default=True)
+    # Per-membership overrides on top of the role bundle (agency portal toggles).
+    permission_grants = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Permission codenames granted beyond the role.",
+    )
+    permission_denies = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Permission codenames revoked from the role.",
+    )
 
     class Meta:
         constraints = [

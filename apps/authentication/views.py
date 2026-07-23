@@ -20,7 +20,7 @@ from apps.common.exceptions import (
 )
 from apps.rbac.constants import ALL_PERMISSIONS
 from apps.rbac.serializers import RoleSerializer
-from apps.rbac.services import permissions_for_role
+from apps.rbac.services import permissions_for_membership, permissions_for_role
 from apps.tenancy.context import get_current_membership, set_current_location
 from apps.tenancy.models import Location, Membership
 from apps.tenancy.serializers import AccessibleLocationSerializer, LocationSerializer
@@ -146,7 +146,7 @@ def _me_payload(request) -> dict:
     if request.user.is_superuser:
         permissions = sorted(ALL_PERMISSIONS)
     else:
-        permissions = sorted(permissions_for_role(membership.role)) if membership else []
+        permissions = sorted(permissions_for_membership(membership)) if membership else []
 
     location = getattr(request, "location", None)
     return {

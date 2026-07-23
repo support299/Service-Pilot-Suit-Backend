@@ -76,7 +76,6 @@ PERMISSION_LABELS: dict[str, str] = {
 ALL_PERMISSIONS: tuple[str, ...] = tuple(PERMISSION_LABELS.keys())
 
 _READ_ONLY_PERMS: tuple[str, ...] = (
-    Permissions.AGENCY_VIEW,
     Permissions.LOCATION_VIEW,
     Permissions.MEMBER_VIEW,
     Permissions.USER_VIEW,
@@ -90,7 +89,7 @@ _READ_ONLY_PERMS: tuple[str, ...] = (
 _STAFF_PERMS: tuple[str, ...] = _READ_ONLY_PERMS + (
     Permissions.REPORT_MANAGE,
     Permissions.SUPPORT_MANAGE,
-    Permissions.ACADEMY_MANAGE,
+    # Academy catalog is managed from Agency portal — not Staff.
 )
 
 _MANAGER_PERMS: tuple[str, ...] = _STAFF_PERMS + (
@@ -100,9 +99,12 @@ _MANAGER_PERMS: tuple[str, ...] = _STAFF_PERMS + (
     Permissions.SETTINGS_MANAGE,
 )
 
+# Agency portal + catalog admin — Agency Admin only by default.
 _AGENCY_ADMIN_PERMS: tuple[str, ...] = _MANAGER_PERMS + (
+    Permissions.AGENCY_VIEW,
     Permissions.AGENCY_MANAGE,
     Permissions.ROLE_MANAGE,
+    Permissions.ACADEMY_MANAGE,
 )
 
 # Super Admin implicitly holds every permission (see ``services``), but we still

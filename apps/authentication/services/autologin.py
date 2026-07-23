@@ -21,7 +21,7 @@ from apps.common.exceptions import (
     ValidationError,
 )
 from apps.rbac.constants import ALL_PERMISSIONS
-from apps.rbac.services import permissions_for_role
+from apps.rbac.services import permissions_for_membership, permissions_for_role
 from apps.tenancy.models import Location
 from apps.tenancy.repositories import LocationRepository
 from apps.tenancy.services import ProvisioningService, resolve_membership_for_login
@@ -75,7 +75,7 @@ class AutoLoginService:
         if user.is_superuser:
             permissions = sorted(ALL_PERMISSIONS)
         else:
-            permissions = sorted(permissions_for_role(membership.role))
+            permissions = sorted(permissions_for_membership(membership))
         logger.info("Auto-login success email=%s location=%s", email, location_id)
         return {
             "tokens": tokens,

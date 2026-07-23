@@ -104,17 +104,19 @@ ASGI_APPLICATION = "config.asgi.application"
 # ─────────────────────────────────────────────────────────────
 # Database
 # ─────────────────────────────────────────────────────────────
+# Prefer DATABASE_URL when set; otherwise discrete NAME/USER/PASSWORD/HOST
+# (also accepts POSTGRES_* aliases).
 if env("DATABASE_URL", default=""):
     DATABASES = {"default": env.db("DATABASE_URL")}
 else:
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.postgresql",
-            "NAME": env("POSTGRES_DB", default="service_pilot_suite"),
-            "USER": env("POSTGRES_USER", default="postgres"),
-            "PASSWORD": env("POSTGRES_PASSWORD", default="postgres"),
-            "HOST": env("POSTGRES_HOST", default="localhost"),
-            "PORT": env("POSTGRES_PORT", default="5432"),
+            "NAME": env("NAME", default=env("POSTGRES_DB", default="service_pilot_suite")),
+            "USER": env("USER", default=env("POSTGRES_USER", default="postgres")),
+            "PASSWORD": env("PASSWORD", default=env("POSTGRES_PASSWORD", default="")),
+            "HOST": env("HOST", default=env("POSTGRES_HOST", default="localhost")),
+            "PORT": env("PORT", default=env("POSTGRES_PORT", default="5432")),
         }
     }
 DATABASES["default"].setdefault("CONN_MAX_AGE", 60)

@@ -14,7 +14,7 @@ from django.core import signing
 
 from apps.common.exceptions import AuthenticationFailedError, NotFoundError
 from apps.rbac.constants import ALL_PERMISSIONS, Roles
-from apps.rbac.services import permissions_for_role
+from apps.rbac.services import permissions_for_membership, permissions_for_role
 from apps.tenancy.repositories import LocationRepository
 from apps.tenancy.services import ProvisioningService, resolve_membership_for_login
 
@@ -75,7 +75,7 @@ def consume_oauth_login_code(code: str) -> dict[str, Any]:
     if user.is_superuser:
         permissions = sorted(ALL_PERMISSIONS)
     else:
-        permissions = sorted(permissions_for_role(membership.role)) if membership else []
+        permissions = sorted(permissions_for_membership(membership)) if membership else []
 
     logger.info(
         "OAuth session exchange success user=%s location=%s", user.email, location_id

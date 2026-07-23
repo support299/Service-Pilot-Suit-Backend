@@ -61,3 +61,28 @@ def permissions_for_role(role: Role | None) -> set[str]:
     if role.is_superuser_role:
         return set(PERMISSION_LABELS.keys())
     return role.permission_codenames()
+
+
+def permissions_for_membership(membership) -> set[str]:
+    """Role permissions ± membership grant/deny overrides."""
+    if membership is None:
+        return set()
+    base = permissions_for_role(membership.role)
+    grants = {
+        str(c).strip()
+        for c in (getattr(membership, "permission_grants", None) or [])
+        if str(c).strip()
+    }
+    denies = {
+        str(c).strip()
+        for c in (getattr(membership, "permission_denies", None) or [])
+        if str(c).strip()
+    }
+    return (base | grants) - denies
+
+
+def permission_catalog() -> list[dict[str, str]]:
+    return [
+        {"codename": code, "name": label}
+        for code, label in PERMISSION_LABELS.items()
+    ]

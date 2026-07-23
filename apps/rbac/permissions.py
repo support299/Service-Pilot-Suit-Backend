@@ -12,7 +12,7 @@ from typing import Iterable
 from rest_framework.permissions import BasePermission
 
 from .constants import ALL_PERMISSIONS
-from .services import permissions_for_role
+from .services import permissions_for_membership, permissions_for_role
 
 
 def _resolve_membership(request):
@@ -32,7 +32,7 @@ def effective_permissions(request) -> set[str]:
     membership = _resolve_membership(request)
     if membership is None:
         return set()
-    return permissions_for_role(membership.role)
+    return permissions_for_membership(membership)
 
 
 class IsSuperAdmin(BasePermission):
