@@ -1,0 +1,39 @@
+# ── Python / Django ──────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+dist/
+build/
+*.egg
+
+.venv/
+venv/
+env/
+
+*.sqlite3
+db.sqlite3
+staticfiles/
+media/
+htmlcov/
+.coverage
+.coverage.*
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+celerybeat-schedule
+celerybeat.pid
+
+# Secrets — keep .env.example tracked
+.env
+.env.*
+!.env.example
+
+# ── Editors / OS ─────────────────────────────────
+.DS_Store
+.idea/
+.vscode/
+*.log
+*.swp
+*~
