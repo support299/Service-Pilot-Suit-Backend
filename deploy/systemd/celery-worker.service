@@ -1,0 +1,29 @@
+[Unit]
+Description=Service Pilot Suite Celery worker
+After=network.target redis-server.service
+Wants=redis-server.service
+
+[Service]
+Type=simple
+User=ubuntu
+Group=www-data
+WorkingDirectory=/home/ubuntu/backend/Service-Pilot-Suit-Backend
+Environment=PATH=/home/ubuntu/backend/Service-Pilot-Suit-Backend/venv/bin:/usr/bin
+Environment=DJANGO_SETTINGS_MODULE=config.settings
+# ≈1GB RAM box: single child, low prefetch, recycle to curb leaks
+ExecStart=/home/ubuntu/backend/Service-Pilot-Suit-Backend/venv/bin/celery \
+    -A config worker \
+    --loglevel=INFO \
+    --concurrency=1 \
+    --prefetch-multiplier=1 \
+    --max-tasks-per-child=40 \
+    --max-memory-per-child=180000 \
+    -n worker@%%h
+Restart=always
+RestartSec=8
+# Soft stop so in-flight ads sync can finish
+TimeoutStopSec=90
+KillSignal=SIGTERM
+
+[Install]
+WantedBy=multi-user.target

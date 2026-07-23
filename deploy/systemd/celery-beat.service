@@ -1,0 +1,23 @@
+[Unit]
+Description=Service Pilot Suite Celery beat
+After=network.target redis-server.service celery-worker.service
+Wants=redis-server.service
+
+[Service]
+Type=simple
+User=ubuntu
+Group=www-data
+WorkingDirectory=/home/ubuntu/backend/Service-Pilot-Suit-Backend
+Environment=PATH=/home/ubuntu/backend/Service-Pilot-Suit-Backend/venv/bin:/usr/bin
+Environment=DJANGO_SETTINGS_MODULE=config.settings
+# Single scheduler process — never run two beats against the same schedule file
+ExecStart=/home/ubuntu/backend/Service-Pilot-Suit-Backend/venv/bin/celery \
+    -A config beat \
+    --loglevel=INFO \
+    --schedule=/home/ubuntu/backend/Service-Pilot-Suit-Backend/celerybeat-schedule \
+    --pidfile=/home/ubuntu/backend/Service-Pilot-Suit-Backend/celerybeat.pid
+Restart=always
+RestartSec=8
+
+[Install]
+WantedBy=multi-user.target

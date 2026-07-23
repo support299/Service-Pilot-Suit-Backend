@@ -248,6 +248,10 @@ class GHLOAuthService:
                     "Open the app from a subaccount and try again."
                 )
 
+            from .ghl_webhooks import prioritize_installed_locations
+
+            locations = prioritize_installed_locations(company_id, locations)
+
             for loc in locations:
                 loc_id = (loc.get("_id") or loc.get("id") or "").strip()
                 if not loc_id:
@@ -346,6 +350,14 @@ class GHLOAuthService:
             logger.exception(
                 "Failed to ensure GHL media folders locations=%s", connected
             )
+
+        # Marketplace Default Webhook URL already covers installed locations —
+        # Opportunity* events hit /api/accounts/webhook/ with no extra subscribe call.
+        logger.info(
+            "GHL marketplace webhooks active for onboarded locations=%s "
+            "(OpportunityCreate/Update/StageUpdate/Delete)",
+            connected,
+        )
 
         return {
             "company_id": company_id,
@@ -449,6 +461,18 @@ class GHLOAuthService:
         except Exception:
             logger.exception("Failed to provision installer user ghl_user_id=%s", ghl_user_id)
             return None
+
+    def bootstrap_location_from_token(
+        self,
+        token_payload: dict[str, Any],
+        *,
+        agency,
+        company_id: str,
+    ) -> None:
+        """Public alias used by INSTALL webhooks and OAuth onboard."""
+        self._persist_and_bootstrap(
+            token_payload, agency=agency, company_id=company_id
+        )
 
     def _persist_and_bootstrap(
         self,

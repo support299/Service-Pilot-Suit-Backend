@@ -1,14 +1,46 @@
-"""User endpoints, scoped to the current tenant (location)."""
+"""User endpoints + public GHL marketplace webhook."""
 from __future__ import annotations
 
-from rest_framework import mixins, viewsets
-from rest_framework.permissions import IsAuthenticated
+import logging
 
+from rest_framework import mixins, viewsets
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.views import APIView
+
+from apps.authentication.services.ghl_webhooks import handle_ghl_webhook
+from apps.common.responses import ok
 from apps.rbac.constants import Permissions
 from apps.rbac.permissions import HasPermission, IsTenantMember
 
 from .models import User
 from .serializers import UserSerializer, UserWriteSerializer
+
+logger = logging.getLogger("apps.accounts")
+
+
+class GhlMarketplaceWebhookView(APIView):
+    """Receive GoHighLevel marketplace webhooks (no JWT).
+
+    Configured as Default Webhook URL:
+    ``https://suit.theservicepilot.com/api/accounts/webhook/``
+
+    Handles INSTALL / UNINSTALL, UserCreate/Update/Delete, and Opportunity*
+    events (same surface as Snapshot JobTracker).
+    """
+
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        payload = request.data
+        if not isinstance(payload, dict):
+            payload = {}
+        result = handle_ghl_webhook(payload)
+        # Always 200 so GHL does not retry forever on business skips.
+        return ok(result)
+
+    def get(self, request):
+        return ok({"status": "ok", "endpoint": "ghl-marketplace-webhook"})
 
 
 class UserViewSet(

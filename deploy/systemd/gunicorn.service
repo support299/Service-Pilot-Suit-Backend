@@ -1,0 +1,20 @@
+[Unit]
+Description=Gunicorn daemon (Service Pilot Suite)
+After=network.target
+
+[Service]
+User=ubuntu
+Group=www-data
+WorkingDirectory=/home/ubuntu/backend/Service-Pilot-Suit-Backend
+Environment=PATH=/home/ubuntu/backend/Service-Pilot-Suit-Backend/venv/bin
+# 2 vCPU / ≈1GB RAM: 2 workers leaves room for Redis + Celery (was 3)
+ExecStart=/home/ubuntu/backend/Service-Pilot-Suit-Backend/venv/bin/gunicorn \
+          --workers 2 \
+          --timeout 120 \
+          --bind unix:/home/ubuntu/backend/Service-Pilot-Suit-Backend/gunicorn.sock \
+          config.wsgi:application
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

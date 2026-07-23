@@ -276,7 +276,7 @@ def sync_location_opportunities_task(location_uuid: str) -> dict:
 
 @shared_task(name="apps.roi.tasks.sync_all_locations_opportunities")
 def sync_all_locations_opportunities() -> dict:
-    """Beat job: refresh CRM opportunities for locations with confirmed pipeline."""
+    """Optional bulk refresh (no longer on Celery beat — webhooks keep opps fresh)."""
     from .models import RoiCrmSetup
     from .services.crm_sync import sync_location_opportunities
 

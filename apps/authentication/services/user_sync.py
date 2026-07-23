@@ -199,6 +199,7 @@ def upsert_user_from_ghl(user_data: dict[str, Any], *, location: Location) -> Us
         "first_name": user_data.get("firstName") or user_data.get("first_name") or "",
         "last_name": user_data.get("lastName") or user_data.get("last_name") or "",
         "ghl_user_id": ghl_user_id,
+        "is_active": True,
         **metadata,
     }
     if email:
@@ -217,6 +218,7 @@ def upsert_user_from_ghl(user_data: dict[str, Any], *, location: Location) -> Us
         for key, value in defaults.items():
             if value is not None and value != "":
                 setattr(user, key, value)
+        user.is_active = True
         user.save()
 
     role_slug = map_ghl_user_to_role_slug(user_data)
@@ -229,6 +231,96 @@ def upsert_user_from_ghl(user_data: dict[str, Any], *, location: Location) -> Us
         user=user, location=location, role_slug=role_slug
     )
     return user
+
+
+def normalize_ghl_user_webhook_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    """Map marketplace User* webhook fields onto the shape ``upsert_user_from_ghl`` expects."""
+    body = dict(payload)
+    nested = body.get("user")
+    if isinstance(nested, dict):
+        merged = {**nested}
+        for key in ("locationId", "companyId", "type", "locations"):
+            if key in body and key not in merged:
+                merged[key] = body[key]
+        body = merged
+
+    role = str(body.get("role") or "").strip().lower()
+    location_id = str(body.get("locationId") or payload.get("locationId") or "").strip()
+    company_id = str(body.get("companyId") or payload.get("companyId") or "").strip()
+    locations = body.get("locations") or payload.get("locations") or []
+    if isinstance(locations, str):
+        locations = [locations]
+    location_ids = [str(x).strip() for x in locations if str(x).strip()]
+    if location_id and location_id not in location_ids:
+        location_ids = [location_id, *location_ids]
+
+    # Marketplace payloads use flat ``role``; our mapper expects ``roles``.
+    if not isinstance(body.get("roles"), dict):
+        if location_id and not company_id:
+            user_type = "account"
+        elif company_id and not location_id:
+            user_type = "agency"
+        else:
+            user_type = "account" if location_id else "agency"
+        body["roles"] = {
+            "type": user_type,
+            "role": "admin" if role in ("admin", "owner") else "user",
+            "locationIds": location_ids,
+            "companyId": company_id or None,
+        }
+    if company_id:
+        body["companyId"] = company_id
+    return body
+
+
+def deactivate_user_from_ghl_webhook(payload: dict[str, Any]) -> dict[str, Any]:
+    """Deactivate memberships (and user if orphaned) for UserDelete webhooks."""
+    from apps.tenancy.models import Membership
+
+    body = payload.get("user") if isinstance(payload.get("user"), dict) else payload
+    ghl_user_id = str(
+        (body or {}).get("id") or payload.get("id") or ""
+    ).strip()
+    email = str((body or {}).get("email") or payload.get("email") or "").strip().lower()
+    location_id = str(payload.get("locationId") or "").strip()
+    company_id = str(payload.get("companyId") or "").strip()
+
+    user = None
+    if ghl_user_id:
+        user = User.objects.filter(ghl_user_id=ghl_user_id).first()
+    if user is None and email:
+        user = User.objects.filter(email__iexact=email).first()
+    if user is None:
+        return {
+            "action": "noop",
+            "reason": "unknown_user",
+            "ghl_user_id": ghl_user_id,
+        }
+
+    memberships = Membership.objects.filter(user=user, is_active=True)
+    if location_id:
+        memberships = memberships.filter(location__ghl_location_id=location_id)
+    elif company_id:
+        memberships = memberships.filter(location__agency__ghl_company_id=company_id)
+
+    deactivated = memberships.update(is_active=False)
+    still_active = Membership.objects.filter(user=user, is_active=True).exists()
+    if not still_active:
+        user.is_active = False
+        user.save(update_fields=["is_active", "updated_at"])
+
+    logger.info(
+        "GHL UserDelete ghl_user_id=%s deactivated_memberships=%s user_active=%s",
+        ghl_user_id,
+        deactivated,
+        still_active,
+    )
+    return {
+        "action": "deleted" if deactivated else "noop",
+        "ghl_user_id": ghl_user_id,
+        "deactivated_memberships": deactivated,
+        "user_deactivated": not still_active,
+    }
 
 
 def sync_location_users(*, location: Location, access_token: str) -> dict[str, int]:

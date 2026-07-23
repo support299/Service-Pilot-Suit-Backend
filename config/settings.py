@@ -218,6 +218,17 @@ CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = TIME_ZONE
+CELERY_ENABLE_UTC = True
+# Small EC2 (≈1GB / 2 vCPU): keep workers lean; beat jobs are infrequent.
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+CELERY_WORKER_MAX_TASKS_PER_CHILD = 40
+CELERY_TASK_ACKS_LATE = True
+CELERY_TASK_REJECT_ON_WORKER_LOST = True
+CELERY_TASK_TRACK_STARTED = True
+CELERY_RESULT_EXPIRES = 3600  # 1h — don't pile results in Redis
+CELERY_TASK_SOFT_TIME_LIMIT = 25 * 60  # ads sync can be long
+CELERY_TASK_TIME_LIMIT = 30 * 60
 # GHL access tokens expire (~24h); refresh agency + location tokens every 10h
 # (same cadence as Snapshot JobTracker). Requires: celery -A config beat
 CELERY_BEAT_SCHEDULE = {
@@ -234,10 +245,8 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.roi.tasks.sync_all_locations_google_ads",
         "schedule": timedelta(hours=10),
     },
-    "sync-crm-opportunities-every-10-hours": {
-        "task": "apps.roi.tasks.sync_all_locations_opportunities",
-        "schedule": timedelta(hours=10),
-    },
+    # CRM opportunities: marketplace webhooks at /api/accounts/webhook/
+    # (OpportunityCreate/Update/StageUpdate/Delete). Manual sync endpoint remains.
 }
 
 

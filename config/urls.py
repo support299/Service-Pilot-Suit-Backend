@@ -22,7 +22,7 @@ api_patterns = [
 ]
 
 urlpatterns = [
-    path("admin/", admin.site.urls),
+    path("api/admin/", admin.site.urls),
     path("api/health/", healthcheck, name="health"),
     path("api/", include((api_patterns, "api"))),
 ]
