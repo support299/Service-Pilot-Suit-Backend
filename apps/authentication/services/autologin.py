@@ -53,6 +53,15 @@ class AutoLoginService:
 
         location = LocationRepository.get_by_location_id(location_id)
         if location is None:
+            inactive = LocationRepository.get_by_location_id(
+                location_id, only_active=False
+            )
+            if inactive is not None and not inactive.is_active:
+                raise NotFoundError(
+                    "This location was uninstalled or deactivated. "
+                    "Re-install / onboard the app for this sub-account, then try again.",
+                    code="location_inactive",
+                )
             raise NotFoundError(
                 "This location is not onboarded or is inactive.",
                 code="location_not_found",

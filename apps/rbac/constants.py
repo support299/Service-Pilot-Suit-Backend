@@ -47,6 +47,9 @@ class Permissions:
     # Success Center — Academy
     ACADEMY_VIEW = "academy.view"
     ACADEMY_MANAGE = "academy.manage"
+    # Success Center — Feature Center
+    FEATURE_VIEW = "feature.view"
+    FEATURE_MANAGE = "feature.manage"
     # Settings
     SETTINGS_VIEW = "settings.view"
     SETTINGS_MANAGE = "settings.manage"
@@ -69,6 +72,8 @@ PERMISSION_LABELS: dict[str, str] = {
     Permissions.SUPPORT_MANAGE: "Manage support tickets",
     Permissions.ACADEMY_VIEW: "View Academy training",
     Permissions.ACADEMY_MANAGE: "Manage Academy content",
+    Permissions.FEATURE_VIEW: "View Feature Center",
+    Permissions.FEATURE_MANAGE: "Manage Feature Center roadmap",
     Permissions.SETTINGS_VIEW: "View settings",
     Permissions.SETTINGS_MANAGE: "Manage settings",
 }
@@ -83,6 +88,7 @@ _READ_ONLY_PERMS: tuple[str, ...] = (
     Permissions.REPORT_VIEW,
     Permissions.SUPPORT_VIEW,
     Permissions.ACADEMY_VIEW,
+    Permissions.FEATURE_VIEW,
     Permissions.SETTINGS_VIEW,
 )
 
@@ -90,6 +96,7 @@ _STAFF_PERMS: tuple[str, ...] = _READ_ONLY_PERMS + (
     Permissions.REPORT_MANAGE,
     Permissions.SUPPORT_MANAGE,
     # Academy catalog is managed from Agency portal — not Staff.
+    # Feature roadmap status/release notes — Super Admin only (via ALL_PERMISSIONS).
 )
 
 _MANAGER_PERMS: tuple[str, ...] = _STAFF_PERMS + (

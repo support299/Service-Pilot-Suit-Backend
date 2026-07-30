@@ -19,6 +19,7 @@ api_patterns = [
     path("", include("apps.roi.urls")),
     path("", include("apps.support.urls")),
     path("", include("apps.academy.urls")),
+    path("", include("apps.feature.urls")),
 ]
 
 urlpatterns = [

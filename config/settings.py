@@ -63,6 +63,7 @@ INSTALLED_APPS = [
     "apps.roi",
     "apps.support",
     "apps.academy",
+    "apps.feature",
 ]
 
 MIDDLEWARE = [

@@ -35,6 +35,12 @@ from .services.agency_portal import (
     user_can_manage_agency_portal,
     user_can_view_agency_portal,
 )
+from .services.location_membership_permissions import (
+    actor_membership_for_location,
+    get_location_membership,
+    serialize_location_membership_permissions,
+    update_location_membership_permissions,
+)
 
 
 class CanViewAgencyPortal(BasePermission):
@@ -138,6 +144,56 @@ class MembershipViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(location=self.request.location)
+
+
+class LocationMembershipPermissionsView(APIView):
+    """Get / set permission toggles for a membership at the current location."""
+
+    def get_permissions(self):
+        if self.request.method == "PUT":
+            return [
+                IsAuthenticated(),
+                IsTenantMember(),
+                HasPermission.require(Permissions.MEMBER_MANAGE)(),
+            ]
+        return [
+            IsAuthenticated(),
+            IsTenantMember(),
+            HasPermission.require(Permissions.MEMBER_VIEW)(),
+        ]
+
+    def get(self, request, membership_id):
+        location = getattr(request, "location", None)
+        if location is None:
+            raise ValidationError("A location context is required.")
+        membership = get_location_membership(location, membership_id)
+        actor_membership = actor_membership_for_location(request)
+        return ok(
+            serialize_location_membership_permissions(
+                membership,
+                actor=request.user,
+                actor_membership=actor_membership,
+            )
+        )
+
+    def put(self, request, membership_id):
+        location = getattr(request, "location", None)
+        if location is None:
+            raise ValidationError("A location context is required.")
+        membership = get_location_membership(location, membership_id)
+        actor_membership = actor_membership_for_location(request)
+        enabled = request.data.get("enabled")
+        if enabled is None and "permissions" in request.data:
+            enabled = request.data.get("permissions")
+        data = update_location_membership_permissions(
+            membership,
+            actor=request.user,
+            actor_membership=actor_membership,
+            enabled=enabled,
+            grants=request.data.get("permission_grants"),
+            denies=request.data.get("permission_denies"),
+        )
+        return ok(data)
 
 
 class AgencyPortalOverviewView(APIView):

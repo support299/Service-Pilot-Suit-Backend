@@ -1,0 +1,91 @@
+from django.urls import path
+
+from .views import (
+    FeatureAnnouncementsView,
+    FeatureCommentCreateView,
+    FeatureHomeView,
+    FeatureMetaView,
+    FeatureRequestDetailView,
+    FeatureRequestListCreateView,
+    FeatureSummaryView,
+    FeatureVoteView,
+    StaffFeatureCommentView,
+    StaffFeatureRequestDetailView,
+    StaffFeatureRequestListView,
+    StaffFeatureStatusView,
+    StaffReleaseNoteArchiveView,
+    StaffReleaseNoteDetailView,
+    StaffReleaseNoteListCreateView,
+    StaffReleaseNotePublishView,
+)
+
+urlpatterns = [
+    path("feature/meta/", FeatureMetaView.as_view(), name="feature-meta"),
+    path("feature/summary/", FeatureSummaryView.as_view(), name="feature-summary"),
+    path("feature/home/", FeatureHomeView.as_view(), name="feature-home"),
+    path(
+        "feature/announcements/",
+        FeatureAnnouncementsView.as_view(),
+        name="feature-announcements",
+    ),
+    path(
+        "feature/requests/",
+        FeatureRequestListCreateView.as_view(),
+        name="feature-request-list",
+    ),
+    path(
+        "feature/requests/<uuid:request_id>/",
+        FeatureRequestDetailView.as_view(),
+        name="feature-request-detail",
+    ),
+    path(
+        "feature/requests/<uuid:request_id>/vote/",
+        FeatureVoteView.as_view(),
+        name="feature-request-vote",
+    ),
+    path(
+        "feature/requests/<uuid:request_id>/comments/",
+        FeatureCommentCreateView.as_view(),
+        name="feature-request-comments",
+    ),
+    path(
+        "feature/staff/requests/",
+        StaffFeatureRequestListView.as_view(),
+        name="feature-staff-request-list",
+    ),
+    path(
+        "feature/staff/requests/<uuid:request_id>/",
+        StaffFeatureRequestDetailView.as_view(),
+        name="feature-staff-request-detail",
+    ),
+    path(
+        "feature/staff/requests/<uuid:request_id>/status/",
+        StaffFeatureStatusView.as_view(),
+        name="feature-staff-request-status",
+    ),
+    path(
+        "feature/staff/requests/<uuid:request_id>/comments/",
+        StaffFeatureCommentView.as_view(),
+        name="feature-staff-request-comments",
+    ),
+    path(
+        "feature/staff/release-notes/",
+        StaffReleaseNoteListCreateView.as_view(),
+        name="feature-staff-release-notes",
+    ),
+    path(
+        "feature/staff/release-notes/<uuid:note_id>/",
+        StaffReleaseNoteDetailView.as_view(),
+        name="feature-staff-release-note-detail",
+    ),
+    path(
+        "feature/staff/release-notes/<uuid:note_id>/publish/",
+        StaffReleaseNotePublishView.as_view(),
+        name="feature-staff-release-note-publish",
+    ),
+    path(
+        "feature/staff/release-notes/<uuid:note_id>/archive/",
+        StaffReleaseNoteArchiveView.as_view(),
+        name="feature-staff-release-note-archive",
+    ),
+]

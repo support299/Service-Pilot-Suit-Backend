@@ -9,6 +9,7 @@ from .views import (
     AgencyPortalRolesView,
     AgencyPortalUsersView,
     AgencyViewSet,
+    LocationMembershipPermissionsView,
     LocationViewSet,
     MembershipViewSet,
     MyLocationsView,
@@ -21,6 +22,11 @@ router.register("memberships", MembershipViewSet, basename="membership")
 
 urlpatterns = [
     path("me/locations/", MyLocationsView.as_view(), name="my-locations"),
+    path(
+        "memberships/<uuid:membership_id>/permissions/",
+        LocationMembershipPermissionsView.as_view(),
+        name="location-membership-permissions",
+    ),
     path("agency/portal/", AgencyPortalOverviewView.as_view(), name="agency-portal"),
     path(
         "agency/locations/",

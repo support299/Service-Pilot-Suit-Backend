@@ -49,7 +49,11 @@ class ProvisioningService:
         timezone_name: str = "",
         tokens: Optional[dict] = None,
     ) -> Location:
-        defaults: dict[str, Any] = {}
+        defaults: dict[str, Any] = {
+            # Re-install / re-onboard must undo UNINSTALL (is_active=False, status=churned).
+            "is_active": True,
+            "status": Location.STATUS_ACTIVE,
+        }
         if name:
             defaults["name"] = name
         if agency is not None:
