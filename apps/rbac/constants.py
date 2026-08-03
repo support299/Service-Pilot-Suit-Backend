@@ -50,6 +50,11 @@ class Permissions:
     # Success Center — Feature Center
     FEATURE_VIEW = "feature.view"
     FEATURE_MANAGE = "feature.manage"
+    # Success Center — Community
+    COMMUNITY_VIEW = "community.view"
+    COMMUNITY_POST = "community.post"
+    COMMUNITY_MANAGE = "community.manage"
+    COMMUNITY_MANAGE_PLATFORM = "community.manage_platform"
     # Settings
     SETTINGS_VIEW = "settings.view"
     SETTINGS_MANAGE = "settings.manage"
@@ -74,6 +79,10 @@ PERMISSION_LABELS: dict[str, str] = {
     Permissions.ACADEMY_MANAGE: "Manage Academy content",
     Permissions.FEATURE_VIEW: "View Feature Center",
     Permissions.FEATURE_MANAGE: "Manage Feature Center roadmap",
+    Permissions.COMMUNITY_VIEW: "View Community channels",
+    Permissions.COMMUNITY_POST: "Post in Community channels",
+    Permissions.COMMUNITY_MANAGE: "Manage company Community channels",
+    Permissions.COMMUNITY_MANAGE_PLATFORM: "Manage Service Pilot & Industry channels",
     Permissions.SETTINGS_VIEW: "View settings",
     Permissions.SETTINGS_MANAGE: "Manage settings",
 }
@@ -89,12 +98,14 @@ _READ_ONLY_PERMS: tuple[str, ...] = (
     Permissions.SUPPORT_VIEW,
     Permissions.ACADEMY_VIEW,
     Permissions.FEATURE_VIEW,
+    Permissions.COMMUNITY_VIEW,
     Permissions.SETTINGS_VIEW,
 )
 
 _STAFF_PERMS: tuple[str, ...] = _READ_ONLY_PERMS + (
     Permissions.REPORT_MANAGE,
     Permissions.SUPPORT_MANAGE,
+    Permissions.COMMUNITY_POST,
     # Academy catalog is managed from Agency portal — not Staff.
     # Feature roadmap status/release notes — Super Admin only (via ALL_PERMISSIONS).
 )
@@ -104,6 +115,7 @@ _MANAGER_PERMS: tuple[str, ...] = _STAFF_PERMS + (
     Permissions.USER_MANAGE,
     Permissions.LOCATION_MANAGE,
     Permissions.SETTINGS_MANAGE,
+    Permissions.COMMUNITY_MANAGE,
 )
 
 # Agency portal + catalog admin — Agency Admin only by default.
@@ -112,6 +124,7 @@ _AGENCY_ADMIN_PERMS: tuple[str, ...] = _MANAGER_PERMS + (
     Permissions.AGENCY_MANAGE,
     Permissions.ROLE_MANAGE,
     Permissions.ACADEMY_MANAGE,
+    Permissions.COMMUNITY_MANAGE_PLATFORM,
 )
 
 # Super Admin implicitly holds every permission (see ``services``), but we still

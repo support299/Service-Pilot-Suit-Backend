@@ -20,6 +20,7 @@ api_patterns = [
     path("", include("apps.support.urls")),
     path("", include("apps.academy.urls")),
     path("", include("apps.feature.urls")),
+    path("", include("apps.community.urls")),
 ]
 
 urlpatterns = [

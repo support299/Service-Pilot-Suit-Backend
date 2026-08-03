@@ -1,0 +1,91 @@
+from django.urls import path
+
+from .views import (
+    CommunityAvailabilityMeView,
+    CommunityChannelAvailabilityView,
+    CommunityChannelDetailView,
+    CommunityChannelListCreateView,
+    CommunityChannelMembersView,
+    CommunityChannelMessagesView,
+    CommunityChannelPinsView,
+    CommunityDmListCreateView,
+    CommunityDmMessagesView,
+    CommunityDmReadView,
+    CommunityHubView,
+    CommunityMessageDetailView,
+    CommunityMessagePinView,
+    CommunityMessageSaveView,
+    CommunityMetaView,
+    CommunitySavedListView,
+)
+
+urlpatterns = [
+    path("community/meta/", CommunityMetaView.as_view(), name="community-meta"),
+    path("community/hub/", CommunityHubView.as_view(), name="community-hub"),
+    path(
+        "community/availability/me/",
+        CommunityAvailabilityMeView.as_view(),
+        name="community-availability-me",
+    ),
+    path(
+        "community/channels/",
+        CommunityChannelListCreateView.as_view(),
+        name="community-channel-list",
+    ),
+    path(
+        "community/channels/<uuid:channel_id>/",
+        CommunityChannelDetailView.as_view(),
+        name="community-channel-detail",
+    ),
+    path(
+        "community/channels/<uuid:channel_id>/members/",
+        CommunityChannelMembersView.as_view(),
+        name="community-channel-members",
+    ),
+    path(
+        "community/channels/<uuid:channel_id>/availability/",
+        CommunityChannelAvailabilityView.as_view(),
+        name="community-channel-availability",
+    ),
+    path(
+        "community/channels/<uuid:channel_id>/messages/",
+        CommunityChannelMessagesView.as_view(),
+        name="community-channel-messages",
+    ),
+    path(
+        "community/channels/<uuid:channel_id>/pins/",
+        CommunityChannelPinsView.as_view(),
+        name="community-channel-pins",
+    ),
+    path(
+        "community/messages/<uuid:message_id>/",
+        CommunityMessageDetailView.as_view(),
+        name="community-message-detail",
+    ),
+    path(
+        "community/messages/<uuid:message_id>/pin/",
+        CommunityMessagePinView.as_view(),
+        name="community-message-pin",
+    ),
+    path(
+        "community/messages/<uuid:message_id>/save/",
+        CommunityMessageSaveView.as_view(),
+        name="community-message-save",
+    ),
+    path(
+        "community/saved/",
+        CommunitySavedListView.as_view(),
+        name="community-saved-list",
+    ),
+    path("community/dms/", CommunityDmListCreateView.as_view(), name="community-dm-list"),
+    path(
+        "community/dms/<uuid:conversation_id>/messages/",
+        CommunityDmMessagesView.as_view(),
+        name="community-dm-messages",
+    ),
+    path(
+        "community/dms/<uuid:conversation_id>/read/",
+        CommunityDmReadView.as_view(),
+        name="community-dm-read",
+    ),
+]
