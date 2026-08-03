@@ -3,11 +3,16 @@ from django.contrib import admin
 from .models import (
     CommunityChannel,
     CommunityChannelMember,
+    CommunityChannelNotificationPreference,
     CommunityDmConversation,
     CommunityDmMessage,
     CommunityDmParticipant,
+    CommunityDmReaction,
     CommunityMessage,
+    CommunityMessageReport,
+    CommunityNotification,
     CommunityPinnedMessage,
+    CommunityReaction,
     CommunitySavedMessage,
     CommunityUserAvailability,
 )
@@ -99,4 +104,50 @@ class CommunityPinnedMessageAdmin(admin.ModelAdmin):
 class CommunitySavedMessageAdmin(admin.ModelAdmin):
     list_display = ("user", "message", "location", "created_at")
     search_fields = ("user__email",)
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(CommunityChannelNotificationPreference)
+class CommunityChannelNotificationPreferenceAdmin(admin.ModelAdmin):
+    list_display = (
+        "user",
+        "channel",
+        "notification_level",
+        "is_muted",
+        "is_hidden",
+        "updated_at",
+    )
+    list_filter = ("notification_level", "is_muted")
+    search_fields = ("user__email", "channel__name")
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(CommunityNotification)
+class CommunityNotificationAdmin(admin.ModelAdmin):
+    list_display = ("user", "reason", "is_read", "channel", "created_at")
+    list_filter = ("reason", "is_read")
+    search_fields = ("user__email", "title", "excerpt")
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(CommunityReaction)
+class CommunityReactionAdmin(admin.ModelAdmin):
+    list_display = ("message", "user", "reaction_key", "created_at")
+    list_filter = ("reaction_key",)
+    search_fields = ("user__email",)
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(CommunityDmReaction)
+class CommunityDmReactionAdmin(admin.ModelAdmin):
+    list_display = ("message", "user", "reaction_key", "created_at")
+    list_filter = ("reaction_key",)
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(CommunityMessageReport)
+class CommunityMessageReportAdmin(admin.ModelAdmin):
+    list_display = ("message", "reporter", "reason", "status", "location", "created_at")
+    list_filter = ("status", "reason")
+    search_fields = ("reporter__email", "notes")
     readonly_fields = ("created_at", "updated_at")

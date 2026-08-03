@@ -32,8 +32,13 @@ def participant_pair_key(user_a_id, user_b_id) -> str:
     return ":".join(sorted([a, b]))
 
 
-def serialize_dm_message(msg: CommunityDmMessage) -> dict[str, Any]:
-    return {
+def serialize_dm_message(
+    msg: CommunityDmMessage,
+    *,
+    viewer=None,
+    reactions: Optional[list] = None,
+) -> dict[str, Any]:
+    payload = {
         "id": str(msg.id),
         "conversation_id": str(msg.conversation_id),
         "body": msg.body if msg.status == CommunityDmMessage.Status.PUBLISHED else "",
@@ -42,7 +47,15 @@ def serialize_dm_message(msg: CommunityDmMessage) -> dict[str, Any]:
         "edited_at": msg.edited_at.isoformat() if msg.edited_at else None,
         "created_at": msg.created_at.isoformat(),
         "updated_at": msg.updated_at.isoformat(),
+        "reactions": reactions if reactions is not None else [],
     }
+    if reactions is None and viewer is not None:
+        from .services_reactions import reactions_for_message
+
+        payload["reactions"] = reactions_for_message(
+            message_id=msg.id, viewer_id=viewer.id, dm=True
+        )
+    return payload
 
 
 def _broadcast_dm(event_type: str, message: dict[str, Any]) -> None:
@@ -232,9 +245,17 @@ def list_dm_messages(
         last_read_at=timezone.now()
     )
 
+    from .services_reactions import summarize_reactions
+
+    reaction_map = summarize_reactions(
+        message_ids=[m.id for m in page], viewer_id=user.id, dm=True
+    )
     return {
         "conversation_id": str(convo.id),
-        "messages": [serialize_dm_message(m) for m in page],
+        "messages": [
+            serialize_dm_message(m, reactions=reaction_map.get(str(m.id), []))
+            for m in page
+        ],
         "has_more": has_more,
         "next_before": str(page[0].id) if page and has_more else None,
     }
@@ -280,10 +301,27 @@ def create_dm_message(
         last_read_at=timezone.now()
     )
 
-    payload = serialize_dm_message(msg)
-    transaction.on_commit(
-        lambda p=payload: _broadcast_dm("community.dm.message.created", p)
-    )
+    payload = serialize_dm_message(msg, viewer=user)
+    message_id = msg.id
+
+    def _after_create(p=payload, mid=message_id):
+        _broadcast_dm("community.dm.message.created", p)
+        try:
+            from .services_notifications import generate_notifications_for_dm_message
+
+            generate_notifications_for_dm_message(
+                CommunityDmMessage.objects.select_related("author", "conversation").get(
+                    pk=mid
+                )
+            )
+        except Exception:
+            import logging
+
+            logging.getLogger("apps.community").exception(
+                "Failed to generate DM notifications for %s", mid
+            )
+
+    transaction.on_commit(_after_create)
     return payload
 
 

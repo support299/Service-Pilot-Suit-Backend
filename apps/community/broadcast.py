@@ -50,3 +50,15 @@ def broadcast_dm_event(
 ) -> None:
     """Fan-out to ``community.dm.<conversation_id>``."""
     _group_send(dm_group_name(conversation_id), event_type, payload)
+
+
+def broadcast_inbox_event(
+    user_id,
+    *,
+    event_type: str,
+    payload: dict[str, Any],
+) -> None:
+    """Fan-out to a per-user inbox room for unread badge updates."""
+    from .services_notifications import inbox_group_name
+
+    _group_send(inbox_group_name(user_id), event_type, payload)

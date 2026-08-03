@@ -1,4 +1,4 @@
-"""WebSocket consumers for community channel + DM rooms."""
+"""WebSocket consumers for community channel + DM + inbox rooms."""
 from __future__ import annotations
 
 import logging
@@ -14,6 +14,7 @@ from apps.tenancy.models import Location, Membership
 
 from . import services
 from . import services_dms
+from . import services_notifications
 
 logger = logging.getLogger("apps.community")
 User = get_user_model()
@@ -191,3 +192,47 @@ class CommunityDmConsumer(_CommunitySocketMixin, AsyncJsonWebsocketConsumer):
         return services_dms.user_can_access_dm(
             conversation_id=conversation_id, location=location, user=user
         )
+
+
+class CommunityInboxConsumer(_CommunitySocketMixin, AsyncJsonWebsocketConsumer):
+    """Per-user room for live unread badge updates."""
+
+    async def connect(self):
+        token = self._extract_token()
+        if not token:
+            await self.close(code=4401)
+            return
+
+        user, location = await self._authenticate(token)
+        if user is None or location is None:
+            await self.close(code=4401)
+            return
+
+        self.user = user
+        self.location = location
+        self.group_name = services_notifications.inbox_group_name(user.id)
+        await self.channel_layer.group_add(self.group_name, self.channel_name)
+        await self.accept()
+        unread = await sync_to_async(services_notifications.unread_count)(
+            user_id=user.id
+        )
+        await self.send_json(
+            {
+                "type": "community.inbox.ready",
+                "unread_count": unread,
+                "location_id": str(location.id),
+            }
+        )
+
+    async def disconnect(self, code):
+        if self.group_name:
+            await self.channel_layer.group_discard(self.group_name, self.channel_name)
+
+    async def receive_json(self, content, **kwargs):
+        event = (content or {}).get("type")
+        if event == "ping":
+            await self.send_json({"type": "pong"})
+
+    async def community_event(self, event):
+        payload = event.get("payload") or {}
+        await self.send_json(payload)

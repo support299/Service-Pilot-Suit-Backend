@@ -418,3 +418,172 @@ class CommunityMessageSaveView(APIView):
                 user=request.user,
             )
         )
+
+
+# ─── Phase 3: notifications / reactions / reports ─────────────────────────
+
+from . import services_notifications  # noqa: E402
+from . import services_reactions  # noqa: E402
+from . import services_reports  # noqa: E402
+
+
+class CommunityNotificationListView(APIView):
+    permission_classes = _VIEW_PERMS
+
+    def get(self, request):
+        return ok(
+            services_notifications.list_notifications(
+                user=request.user,
+                limit=request.query_params.get("limit") or 40,
+            )
+        )
+
+
+class CommunityNotificationReadAllView(APIView):
+    permission_classes = _VIEW_PERMS
+
+    def post(self, request):
+        return ok(services_notifications.mark_all_notifications_read(user=request.user))
+
+
+class CommunityNotificationReadView(APIView):
+    permission_classes = _VIEW_PERMS
+
+    def post(self, request, notification_id):
+        read = request.data.get("is_read", True)
+        if isinstance(read, str):
+            read = read.lower() not in ("0", "false", "no")
+        return ok(
+            services_notifications.mark_notification_read(
+                notification_id=str(notification_id),
+                user=request.user,
+                read=bool(read),
+            )
+        )
+
+
+class CommunityChannelNotificationsReadView(APIView):
+    permission_classes = _VIEW_PERMS
+
+    def post(self, request, channel_id):
+        return ok(
+            services_notifications.mark_channel_notifications_read(
+                channel_id=str(channel_id),
+                location=request.location,
+                user=request.user,
+            )
+        )
+
+
+class CommunityChannelNotificationPreferenceView(APIView):
+    permission_classes = _VIEW_PERMS
+
+    def get(self, request, channel_id):
+        return ok(
+            services_notifications.get_channel_preference(
+                channel_id=str(channel_id),
+                location=request.location,
+                user=request.user,
+            )
+        )
+
+    def put(self, request, channel_id):
+        payload = request.data or {}
+        return ok(
+            services_notifications.update_channel_preference(
+                channel_id=str(channel_id),
+                location=request.location,
+                user=request.user,
+                notification_level=payload.get("notification_level"),
+                notify_thread_replies=payload.get("notify_thread_replies"),
+                is_muted=payload.get("is_muted"),
+                is_hidden=payload.get("is_hidden"),
+            )
+        )
+
+
+class CommunityReactionMetaView(APIView):
+    permission_classes = _VIEW_PERMS
+
+    def get(self, request):
+        return ok({"reactions": services_reactions.reaction_meta()})
+
+
+class CommunityMessageReactionView(APIView):
+    permission_classes = _VIEW_PERMS
+
+    def post(self, request, message_id):
+        held = effective_permissions(request)
+        return ok(
+            services_reactions.toggle_channel_reaction(
+                message_id=str(message_id),
+                location=request.location,
+                user=request.user,
+                held=held,
+                reaction_key=request.data.get("reaction_key")
+                or request.data.get("key")
+                or "",
+            )
+        )
+
+
+class CommunityDmMessageReactionView(APIView):
+    permission_classes = _VIEW_PERMS
+
+    def post(self, request, message_id):
+        return ok(
+            services_reactions.toggle_dm_reaction(
+                message_id=str(message_id),
+                location=request.location,
+                user=request.user,
+                reaction_key=request.data.get("reaction_key")
+                or request.data.get("key")
+                or "",
+            )
+        )
+
+
+class CommunityMessageReportView(APIView):
+    permission_classes = _VIEW_PERMS
+
+    def post(self, request, message_id):
+        return created(
+            services_reports.report_message(
+                message_id=str(message_id),
+                location=request.location,
+                user=request.user,
+                reason=request.data.get("reason", "other"),
+                notes=request.data.get("notes", ""),
+            )
+        )
+
+
+class CommunityReportsListView(APIView):
+    permission_classes = _VIEW_PERMS
+
+    def get(self, request):
+        held = effective_permissions(request)
+        return ok(
+            services_reports.list_reports(
+                location=request.location,
+                user=request.user,
+                held=held,
+                status=request.query_params.get("status") or "open",
+            )
+        )
+
+
+class CommunityReportDetailView(APIView):
+    permission_classes = _VIEW_PERMS
+
+    def patch(self, request, report_id):
+        held = effective_permissions(request)
+        return ok(
+            services_reports.update_report_status(
+                report_id=str(report_id),
+                location=request.location,
+                user=request.user,
+                held=held,
+                status=request.data.get("status", ""),
+            )
+        )

@@ -7,15 +7,26 @@ from .views import (
     CommunityChannelListCreateView,
     CommunityChannelMembersView,
     CommunityChannelMessagesView,
+    CommunityChannelNotificationPreferenceView,
+    CommunityChannelNotificationsReadView,
     CommunityChannelPinsView,
     CommunityDmListCreateView,
+    CommunityDmMessageReactionView,
     CommunityDmMessagesView,
     CommunityDmReadView,
     CommunityHubView,
     CommunityMessageDetailView,
     CommunityMessagePinView,
+    CommunityMessageReactionView,
+    CommunityMessageReportView,
     CommunityMessageSaveView,
     CommunityMetaView,
+    CommunityNotificationListView,
+    CommunityNotificationReadAllView,
+    CommunityNotificationReadView,
+    CommunityReactionMetaView,
+    CommunityReportDetailView,
+    CommunityReportsListView,
     CommunitySavedListView,
 )
 
@@ -26,6 +37,36 @@ urlpatterns = [
         "community/availability/me/",
         CommunityAvailabilityMeView.as_view(),
         name="community-availability-me",
+    ),
+    path(
+        "community/notifications/",
+        CommunityNotificationListView.as_view(),
+        name="community-notification-list",
+    ),
+    path(
+        "community/notifications/read-all/",
+        CommunityNotificationReadAllView.as_view(),
+        name="community-notification-read-all",
+    ),
+    path(
+        "community/notifications/<uuid:notification_id>/read/",
+        CommunityNotificationReadView.as_view(),
+        name="community-notification-read",
+    ),
+    path(
+        "community/reactions/meta/",
+        CommunityReactionMetaView.as_view(),
+        name="community-reaction-meta",
+    ),
+    path(
+        "community/reports/",
+        CommunityReportsListView.as_view(),
+        name="community-report-list",
+    ),
+    path(
+        "community/reports/<uuid:report_id>/",
+        CommunityReportDetailView.as_view(),
+        name="community-report-detail",
     ),
     path(
         "community/channels/",
@@ -58,6 +99,16 @@ urlpatterns = [
         name="community-channel-pins",
     ),
     path(
+        "community/channels/<uuid:channel_id>/notification-preference/",
+        CommunityChannelNotificationPreferenceView.as_view(),
+        name="community-channel-notification-preference",
+    ),
+    path(
+        "community/channels/<uuid:channel_id>/notifications/read/",
+        CommunityChannelNotificationsReadView.as_view(),
+        name="community-channel-notifications-read",
+    ),
+    path(
         "community/messages/<uuid:message_id>/",
         CommunityMessageDetailView.as_view(),
         name="community-message-detail",
@@ -71,6 +122,16 @@ urlpatterns = [
         "community/messages/<uuid:message_id>/save/",
         CommunityMessageSaveView.as_view(),
         name="community-message-save",
+    ),
+    path(
+        "community/messages/<uuid:message_id>/reactions/",
+        CommunityMessageReactionView.as_view(),
+        name="community-message-reaction",
+    ),
+    path(
+        "community/messages/<uuid:message_id>/report/",
+        CommunityMessageReportView.as_view(),
+        name="community-message-report",
     ),
     path(
         "community/saved/",
@@ -87,5 +148,10 @@ urlpatterns = [
         "community/dms/<uuid:conversation_id>/read/",
         CommunityDmReadView.as_view(),
         name="community-dm-read",
+    ),
+    path(
+        "community/dm-messages/<uuid:message_id>/reactions/",
+        CommunityDmMessageReactionView.as_view(),
+        name="community-dm-message-reaction",
     ),
 ]

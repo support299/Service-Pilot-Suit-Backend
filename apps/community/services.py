@@ -9,7 +9,7 @@ import re
 from typing import Any, Optional
 
 from django.db import transaction
-from django.db.models import Count, Q, QuerySet
+from django.db.models import Case, Count, IntegerField, Q, QuerySet, Value, When
 from django.utils import timezone
 from django.utils.text import slugify
 
@@ -278,6 +278,63 @@ def visible_channels_queryset(
     return qs
 
 
+def _hub_unread_counts(*, user, channel_ids: list) -> dict[str, int]:
+    """Count unread root messages per channel since the user's last_read_at.
+
+    Excludes the viewer's own messages. Channels without active membership → 0.
+    """
+    out = {str(cid): 0 for cid in channel_ids}
+    if not channel_ids:
+        return out
+
+    memberships = list(
+        CommunityChannelMember.objects.filter(
+            user=user,
+            left_at__isnull=True,
+            channel_id__in=channel_ids,
+        ).only("channel_id", "last_read_at")
+    )
+    if not memberships:
+        return out
+
+    when_clauses = []
+    member_channel_ids = []
+    for row in memberships:
+        member_channel_ids.append(row.channel_id)
+        if row.last_read_at is None:
+            when_clauses.append(When(channel_id=row.channel_id, then=Value(1)))
+        else:
+            when_clauses.append(
+                When(
+                    channel_id=row.channel_id,
+                    created_at__gt=row.last_read_at,
+                    then=Value(1),
+                )
+            )
+
+    rows = (
+        CommunityMessage.objects.filter(
+            channel_id__in=member_channel_ids,
+            status=CommunityMessage.Status.PUBLISHED,
+            thread_root__isnull=True,
+        )
+        .exclude(author_id=user.id)
+        .annotate(
+            is_unread=Case(
+                *when_clauses,
+                default=Value(0),
+                output_field=IntegerField(),
+            )
+        )
+        .filter(is_unread=1)
+        .values("channel_id")
+        .annotate(c=Count("id"))
+    )
+    for row in rows:
+        out[str(row["channel_id"])] = int(row["c"])
+    return out
+
+
 def list_hub(
     *,
     location: Location,
@@ -294,6 +351,9 @@ def list_hub(
     role_map = _membership_role_map(
         user=user,
         channel_ids=[c.id for c in channels],
+    )
+    unread_map = _hub_unread_counts(
+        user=user, channel_ids=[c.id for c in channels]
     )
 
     groups: dict[str, list[dict[str, Any]]] = {
@@ -312,7 +372,7 @@ def list_hub(
             serialize_channel(
                 channel,
                 member_count=getattr(channel, "member_count", None),
-                unread_count=0,
+                unread_count=unread_map.get(str(channel.id), 0),
                 can_manage=can_manage,
                 current_user_role=role_map.get(channel.id),
             )
@@ -665,8 +725,13 @@ MAX_MESSAGE_LIMIT = 100
 MAX_MESSAGE_BODY = 8000
 
 
-def serialize_message(msg: CommunityMessage) -> dict[str, Any]:
-    return {
+def serialize_message(
+    msg: CommunityMessage,
+    *,
+    viewer=None,
+    reactions: Optional[list] = None,
+) -> dict[str, Any]:
+    payload = {
         "id": str(msg.id),
         "channel_id": str(msg.channel_id),
         "body": msg.body if msg.status == CommunityMessage.Status.PUBLISHED else "",
@@ -676,7 +741,15 @@ def serialize_message(msg: CommunityMessage) -> dict[str, Any]:
         "edited_at": msg.edited_at.isoformat() if msg.edited_at else None,
         "created_at": msg.created_at.isoformat(),
         "updated_at": msg.updated_at.isoformat(),
+        "reactions": reactions if reactions is not None else [],
     }
+    if reactions is None and viewer is not None:
+        from .services_reactions import reactions_for_message
+
+        payload["reactions"] = reactions_for_message(
+            message_id=msg.id, viewer_id=viewer.id, dm=False
+        )
+    return payload
 
 
 def _get_message(message_id: str) -> CommunityMessage:
@@ -737,6 +810,13 @@ def list_messages(
     channel = _require_channel_access(
         channel_id=channel_id, location=location, user=user
     )
+    # Soft-join platform channels when reading history so prefs/notifs apply.
+    _ensure_active_member(
+        channel=channel,
+        user=user,
+        location=location,
+        role=CommunityChannelMember.Role.MEMBER,
+    )
     try:
         limit = int(limit)
     except (TypeError, ValueError):
@@ -769,9 +849,17 @@ def list_messages(
         channel=channel, user=user, left_at__isnull=True
     ).update(last_read_at=timezone.now())
 
+    from .services_reactions import summarize_reactions
+
+    reaction_map = summarize_reactions(
+        message_ids=[m.id for m in page], viewer_id=user.id, dm=False
+    )
     return {
         "channel_id": str(channel.id),
-        "messages": [serialize_message(m) for m in page],
+        "messages": [
+            serialize_message(m, reactions=reaction_map.get(str(m.id), []))
+            for m in page
+        ],
         "has_more": has_more,
         "next_before": str(page[0].id) if page and has_more else None,
     }
@@ -837,10 +925,25 @@ def create_message(
         channel=channel, user=user, left_at__isnull=True
     ).update(last_read_at=timezone.now())
 
-    payload = serialize_message(msg)
-    transaction.on_commit(
-        lambda p=payload: _broadcast_message("community.message.created", p)
-    )
+    payload = serialize_message(msg, viewer=user)
+    message_id = msg.id
+
+    def _after_create(p=payload, mid=message_id):
+        _broadcast_message("community.message.created", p)
+        try:
+            from .services_notifications import generate_notifications_for_channel_message
+
+            generate_notifications_for_channel_message(
+                CommunityMessage.objects.select_related("author", "channel").get(pk=mid)
+            )
+        except Exception:
+            import logging
+
+            logging.getLogger("apps.community").exception(
+                "Failed to generate notifications for message %s", mid
+            )
+
+    transaction.on_commit(_after_create)
     return payload
 
 

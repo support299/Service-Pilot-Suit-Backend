@@ -393,3 +393,253 @@ class CommunitySavedMessage(BaseModel):
 
     def __str__(self) -> str:
         return f"saved {self.message_id} by {self.user_id}"
+
+
+# ─── Phase 3: notifications / reactions / reports ─────────────────────────
+
+
+class CommunityChannelNotificationPreference(BaseModel):
+    """Per-user, per-channel inbox prefs (in-app only)."""
+
+    class Level(models.TextChoices):
+        ALL_MESSAGES = "all_messages", "All messages"
+        MENTIONS_AND_REPLIES = "mentions_and_replies", "Mentions & replies"
+        NONE = "none", "None"
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="community_notification_preferences",
+    )
+    channel = models.ForeignKey(
+        CommunityChannel,
+        on_delete=models.CASCADE,
+        related_name="notification_preferences",
+    )
+    notification_level = models.CharField(
+        max_length=32,
+        choices=Level.choices,
+        default=Level.MENTIONS_AND_REPLIES,
+    )
+    notify_thread_replies = models.BooleanField(default=True)
+    is_muted = models.BooleanField(default=False)
+    is_hidden = models.BooleanField(default=False)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "channel"],
+                name="unique_community_channel_notification_pref",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["channel", "notification_level"]),
+            models.Index(fields=["user", "is_muted"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"pref {self.user_id} / {self.channel_id}: {self.notification_level}"
+
+
+class CommunityNotification(BaseModel):
+    """In-app Community inbox row."""
+
+    class Reason(models.TextChoices):
+        NEW_MESSAGE = "new_message", "New message"
+        MENTION = "mention", "Mention"
+        THREAD_REPLY = "thread_reply", "Thread reply"
+        DM_MESSAGE = "dm_message", "Direct message"
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="community_notifications",
+    )
+    channel = models.ForeignKey(
+        CommunityChannel,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="notifications",
+    )
+    dm_conversation = models.ForeignKey(
+        CommunityDmConversation,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="notifications",
+    )
+    message = models.ForeignKey(
+        CommunityMessage,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="notifications",
+    )
+    dm_message = models.ForeignKey(
+        CommunityDmMessage,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="notifications",
+    )
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="community_notifications_authored",
+    )
+    thread_root = models.ForeignKey(
+        CommunityMessage,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="thread_notifications",
+    )
+    reason = models.CharField(max_length=32, choices=Reason.choices, db_index=True)
+    title = models.CharField(max_length=160, blank=True, default="")
+    excerpt = models.CharField(max_length=200, blank=True, default="")
+    is_read = models.BooleanField(default=False, db_index=True)
+    read_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user", "-created_at"]),
+            models.Index(fields=["user", "is_read", "-created_at"]),
+            models.Index(fields=["user", "channel", "is_read"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "message", "reason"],
+                condition=models.Q(message__isnull=False),
+                name="unique_community_notif_user_message_reason",
+            ),
+            models.UniqueConstraint(
+                fields=["user", "dm_message", "reason"],
+                condition=models.Q(dm_message__isnull=False),
+                name="unique_community_notif_user_dm_message_reason",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"notif {self.id} → {self.user_id} ({self.reason})"
+
+
+class CommunityReaction(BaseModel):
+    """Emoji reaction on a channel message."""
+
+    message = models.ForeignKey(
+        CommunityMessage,
+        on_delete=models.CASCADE,
+        related_name="reactions",
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="community_reactions",
+    )
+    reaction_key = models.CharField(max_length=32, db_index=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["message", "user", "reaction_key"],
+                name="unique_community_message_reaction",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["message", "reaction_key"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.reaction_key} on {self.message_id} by {self.user_id}"
+
+
+class CommunityDmReaction(BaseModel):
+    """Emoji reaction on a DM message."""
+
+    message = models.ForeignKey(
+        CommunityDmMessage,
+        on_delete=models.CASCADE,
+        related_name="reactions",
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="community_dm_reactions",
+    )
+    reaction_key = models.CharField(max_length=32, db_index=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["message", "user", "reaction_key"],
+                name="unique_community_dm_message_reaction",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["message", "reaction_key"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.reaction_key} on dm {self.message_id} by {self.user_id}"
+
+
+class CommunityMessageReport(BaseModel):
+    """Minimal moderation report for channel messages."""
+
+    class Status(models.TextChoices):
+        OPEN = "open", "Open"
+        REVIEWED = "reviewed", "Reviewed"
+        DISMISSED = "dismissed", "Dismissed"
+
+    message = models.ForeignKey(
+        CommunityMessage,
+        on_delete=models.CASCADE,
+        related_name="reports",
+    )
+    reporter = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="community_message_reports",
+    )
+    location = models.ForeignKey(
+        "tenancy.Location",
+        on_delete=models.CASCADE,
+        related_name="community_message_reports",
+        help_text="Reporter's active location when filing the report.",
+    )
+    reason = models.CharField(max_length=64, blank=True, default="other")
+    notes = models.TextField(blank=True, default="")
+    status = models.CharField(
+        max_length=16,
+        choices=Status.choices,
+        default=Status.OPEN,
+        db_index=True,
+    )
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="community_reports_reviewed",
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["status", "-created_at"]),
+            models.Index(fields=["location", "status", "-created_at"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["message", "reporter"],
+                name="unique_community_message_report_per_user",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"report {self.id} on {self.message_id}"
