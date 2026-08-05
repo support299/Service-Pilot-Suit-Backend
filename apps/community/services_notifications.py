@@ -175,18 +175,23 @@ def serialize_notification(row: CommunityNotification) -> dict[str, Any]:
     }
 
 
-def list_notifications(*, user, limit: int = NOTIFICATION_LIMIT) -> dict[str, Any]:
+def list_notifications(
+    *,
+    user,
+    limit: int = NOTIFICATION_LIMIT,
+    unread_only: bool = False,
+) -> dict[str, Any]:
     try:
         limit = max(1, min(int(limit), 100))
     except (TypeError, ValueError):
         limit = NOTIFICATION_LIMIT
 
-    qs = (
-        CommunityNotification.objects.filter(user=user)
-        .select_related("author", "channel", "dm_conversation", "message", "dm_message")
-        .order_by("-created_at")[:limit]
+    qs = CommunityNotification.objects.filter(user=user).select_related(
+        "author", "channel", "dm_conversation", "message", "dm_message"
     )
-    rows = list(qs)
+    if unread_only:
+        qs = qs.filter(is_read=False)
+    rows = list(qs.order_by("-created_at")[:limit])
     unread_count = CommunityNotification.objects.filter(user=user, is_read=False).count()
     return {
         "notifications": [serialize_notification(r) for r in rows],

@@ -431,10 +431,16 @@ class CommunityNotificationListView(APIView):
     permission_classes = _VIEW_PERMS
 
     def get(self, request):
+        unread_only = request.query_params.get("unread_only") in (
+            "1",
+            "true",
+            "True",
+        )
         return ok(
             services_notifications.list_notifications(
                 user=request.user,
                 limit=request.query_params.get("limit") or 40,
+                unread_only=unread_only,
             )
         )
 
