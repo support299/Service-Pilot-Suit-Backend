@@ -419,7 +419,7 @@ class CommunityChannelNotificationPreference(BaseModel):
     notification_level = models.CharField(
         max_length=32,
         choices=Level.choices,
-        default=Level.MENTIONS_AND_REPLIES,
+        default=Level.ALL_MESSAGES,
     )
     notify_thread_replies = models.BooleanField(default=True)
     is_muted = models.BooleanField(default=False)

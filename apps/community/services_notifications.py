@@ -5,7 +5,7 @@ import re
 from typing import Any, Optional
 
 from django.db import transaction
-from django.db.models import Count, Q
+from django.db.models import Count
 from django.utils import timezone
 
 from apps.common.exceptions import NotFoundError, ValidationError
@@ -22,7 +22,7 @@ from .models import (
 )
 from .services import _user_payload, user_can_view_channel
 
-DEFAULT_LEVEL = CommunityChannelNotificationPreference.Level.MENTIONS_AND_REPLIES
+DEFAULT_LEVEL = CommunityChannelNotificationPreference.Level.ALL_MESSAGES
 NOTIFICATION_LIMIT = 40
 
 LEVELS = {c.value for c in CommunityChannelNotificationPreference.Level}
@@ -50,23 +50,29 @@ def _title_for_reason(reason: str) -> str:
     return "New message"
 
 
+def _normalize_public_level(level: str) -> str:
+    if level == CommunityChannelNotificationPreference.Level.NONE:
+        return CommunityChannelNotificationPreference.Level.NONE
+    # Treat legacy mentions_and_replies (and anything else) as all_messages.
+    return CommunityChannelNotificationPreference.Level.ALL_MESSAGES
+
+
 def serialize_preference(
     channel_id: str,
     row: Optional[CommunityChannelNotificationPreference] = None,
 ) -> dict[str, Any]:
-    level = (
-        row.notification_level
-        if row
-        else DEFAULT_LEVEL
-    )
+    raw_level = row.notification_level if row else DEFAULT_LEVEL
     muted = bool(row.is_muted) if row else False
-    if level == CommunityChannelNotificationPreference.Level.NONE:
+    if raw_level == CommunityChannelNotificationPreference.Level.NONE:
         muted = True
+    level = _normalize_public_level(raw_level)
+    if muted:
+        level = CommunityChannelNotificationPreference.Level.NONE
     return {
         "channel_id": str(channel_id),
         "notification_level": level,
         "notify_thread_replies": True if row is None else bool(row.notify_thread_replies),
-        "is_muted": muted,
+        "is_muted": muted or level == CommunityChannelNotificationPreference.Level.NONE,
         "is_hidden": False if row is None else bool(row.is_hidden),
         "updated_at": row.updated_at.isoformat() if row else None,
     }
@@ -107,25 +113,25 @@ def update_channel_preference(
         row.notification_level = CommunityChannelNotificationPreference.Level.NONE
         row.is_muted = True
     elif notification_level is not None:
-        level = str(notification_level).strip()
-        if level not in LEVELS:
+        cleaned = str(notification_level).strip()
+        if cleaned not in LEVELS:
             raise ValidationError(
                 "Invalid notification level.",
                 details={"notification_level": "invalid"},
                 code="invalid_notification_level",
             )
+        level = _normalize_public_level(cleaned)
         row.notification_level = level
         row.is_muted = level == CommunityChannelNotificationPreference.Level.NONE
-    elif is_muted is False and row.notification_level == CommunityChannelNotificationPreference.Level.NONE:
-        row.notification_level = DEFAULT_LEVEL
+    elif is_muted is False:
         row.is_muted = False
+        if row.notification_level == CommunityChannelNotificationPreference.Level.NONE:
+            row.notification_level = DEFAULT_LEVEL
 
     if notify_thread_replies is not None:
         row.notify_thread_replies = bool(notify_thread_replies)
     if is_hidden is not None:
         row.is_hidden = bool(is_hidden)
-    if is_muted is False:
-        row.is_muted = False
 
     row.save()
     return serialize_preference(str(channel.id), row)
@@ -306,34 +312,18 @@ def _should_notify_channel_member(
     message: CommunityMessage,
     recipient,
 ) -> Optional[str]:
+    """Notify unless muted/none. Default (no pref) = all messages."""
     level = pref.notification_level if pref else DEFAULT_LEVEL
     muted = bool(pref.is_muted) if pref else False
     if muted or level == CommunityChannelNotificationPreference.Level.NONE:
         return None
 
-    mention = _body_mentions_user(message.body, recipient)
-    if mention:
+    # Mentions still get a specific reason if present; otherwise every message.
+    if _body_mentions_user(message.body, recipient):
         return CommunityNotification.Reason.MENTION
-
     if message.thread_root_id:
-        notify_replies = True if pref is None else bool(pref.notify_thread_replies)
-        if not notify_replies:
-            return None
-        # Mentions-and-replies + all_messages: notify thread participants.
-        participated = CommunityMessage.objects.filter(
-            Q(pk=message.thread_root_id) | Q(thread_root_id=message.thread_root_id),
-            author_id=recipient.id,
-            status=CommunityMessage.Status.PUBLISHED,
-        ).exists()
-        if participated:
-            return CommunityNotification.Reason.THREAD_REPLY
-        if level == CommunityChannelNotificationPreference.Level.ALL_MESSAGES:
-            return CommunityNotification.Reason.THREAD_REPLY
-        return None
-
-    if level == CommunityChannelNotificationPreference.Level.ALL_MESSAGES:
-        return CommunityNotification.Reason.NEW_MESSAGE
-    return None
+        return CommunityNotification.Reason.THREAD_REPLY
+    return CommunityNotification.Reason.NEW_MESSAGE
 
 
 def generate_notifications_for_channel_message(message: CommunityMessage) -> None:
