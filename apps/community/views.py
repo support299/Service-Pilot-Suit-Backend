@@ -141,11 +141,62 @@ class CommunityChannelMembersView(APIView):
     ]
 
     def get(self, request, channel_id):
+        held = effective_permissions(request)
         return ok(
             services.list_members(
                 channel_id=str(channel_id),
                 location=request.location,
                 user=request.user,
+                held=held,
+            )
+        )
+
+    def post(self, request, channel_id):
+        held = effective_permissions(request)
+        payload = request.data or {}
+        return created(
+            services.add_channel_member(
+                channel_id=str(channel_id),
+                location=request.location,
+                user=request.user,
+                held=held,
+                target_user_id=str(payload.get("user_id") or ""),
+                role=payload.get("role") or "member",
+            )
+        )
+
+
+class CommunityChannelMemberDetailView(APIView):
+    permission_classes = [
+        IsAuthenticated,
+        HasTenantContext,
+        IsTenantMember,
+        HasPermission.require(Permissions.COMMUNITY_VIEW),
+    ]
+
+    def patch(self, request, channel_id, user_id):
+        held = effective_permissions(request)
+        payload = request.data or {}
+        return ok(
+            services.update_channel_member_role(
+                channel_id=str(channel_id),
+                location=request.location,
+                user=request.user,
+                held=held,
+                target_user_id=str(user_id),
+                role=payload.get("role") or "",
+            )
+        )
+
+    def delete(self, request, channel_id, user_id):
+        held = effective_permissions(request)
+        return ok(
+            services.remove_channel_member(
+                channel_id=str(channel_id),
+                location=request.location,
+                user=request.user,
+                held=held,
+                target_user_id=str(user_id),
             )
         )
 

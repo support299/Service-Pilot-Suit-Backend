@@ -5,6 +5,7 @@ from .views import (
     CommunityChannelAvailabilityView,
     CommunityChannelDetailView,
     CommunityChannelListCreateView,
+    CommunityChannelMemberDetailView,
     CommunityChannelMembersView,
     CommunityChannelMessagesView,
     CommunityChannelNotificationPreferenceView,
@@ -82,6 +83,11 @@ urlpatterns = [
         "community/channels/<uuid:channel_id>/members/",
         CommunityChannelMembersView.as_view(),
         name="community-channel-members",
+    ),
+    path(
+        "community/channels/<uuid:channel_id>/members/<uuid:user_id>/",
+        CommunityChannelMemberDetailView.as_view(),
+        name="community-channel-member-detail",
     ),
     path(
         "community/channels/<uuid:channel_id>/availability/",

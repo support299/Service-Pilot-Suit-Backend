@@ -632,15 +632,106 @@ def get_channel_detail(
     )
 
 
+MEMBER_ROLES = {c.value for c in CommunityChannelMember.Role}
+
+
+def _candidate_location_for_channel(
+    channel: CommunityChannel,
+    *,
+    caller_location: Location,
+) -> Location:
+    """Location whose active memberships are eligible to add.
+
+    Company channels: channel's location only.
+    Platform channels: caller's active location (no cross-company adds).
+    """
+    if channel.channel_type == CommunityChannel.ChannelType.COMPANY:
+        if channel.location_id is None:
+            raise ValidationError("Company channel is missing a location.")
+        return channel.location
+    return caller_location
+
+
+def serialize_candidate(membership: Membership) -> dict[str, Any]:
+    return {
+        "user_id": str(membership.user_id),
+        "user": _user_payload(membership.user),
+        "location_id": str(membership.location_id) if membership.location_id else None,
+    }
+
+
+def _list_candidates(
+    *,
+    channel: CommunityChannel,
+    candidate_location: Location,
+) -> list[dict[str, Any]]:
+    active_member_ids = set(
+        _active_members_qs(channel).values_list("user_id", flat=True)
+    )
+    rows = (
+        Membership.objects.filter(location=candidate_location, is_active=True)
+        .exclude(user_id__in=active_member_ids)
+        .select_related("user")
+        .order_by("user__first_name", "user__last_name", "user__email")
+    )
+    return [serialize_candidate(m) for m in rows]
+
+
+def _require_manage_channel(
+    channel: CommunityChannel,
+    *,
+    location: Location,
+    user,
+    held: set[str],
+) -> None:
+    if not user_can_view_channel(channel, location=location, user=user):
+        raise NotFoundError("Channel not found.")
+    if not user_can_manage_channel(channel, location=location, user=user, held=held):
+        raise PermissionDeniedError("You cannot manage members for this channel.")
+
+
+def _require_location_member(*, location: Location, user_id) -> Membership:
+    try:
+        return Membership.objects.select_related("user").get(
+            location=location,
+            user_id=user_id,
+            is_active=True,
+        )
+    except (Membership.DoesNotExist, ValueError, TypeError) as exc:
+        raise ValidationError(
+            "User is not an active member of this location.",
+            details={"user_id": "not_location_member"},
+        ) from exc
+
+
+def _parse_member_role(role: Optional[str]) -> str:
+    cleaned = (role or "").strip().lower()
+    if cleaned not in MEMBER_ROLES:
+        raise ValidationError(
+            "Invalid role.",
+            details={
+                "role": f"Must be one of: {', '.join(sorted(MEMBER_ROLES))}",
+            },
+        )
+    return cleaned
+
+
 def list_members(
     *,
     channel_id: str,
     location: Location,
     user,
+    held: Optional[set[str]] = None,
 ) -> dict[str, Any]:
     channel = get_channel(channel_id)
     if not user_can_view_channel(channel, location=location, user=user):
         raise NotFoundError("Channel not found.")
+
+    held_perms = held if held is not None else set()
+    can_manage = user_can_manage_channel(
+        channel, location=location, user=user, held=held_perms
+    )
+
     rows = list(
         _active_members_qs(channel)
         .select_related("user", "location")
@@ -656,11 +747,158 @@ def list_members(
             and r.location_id == location.id
         )
         members.append(data)
+
+    candidates: list[dict[str, Any]] = []
+    if can_manage:
+        candidate_location = _candidate_location_for_channel(
+            channel, caller_location=location
+        )
+        candidates = _list_candidates(
+            channel=channel, candidate_location=candidate_location
+        )
+
     return {
         "channel_id": str(channel.id),
         "count": len(members),
         "members": members,
+        "candidates": candidates,
+        "can_manage": can_manage,
     }
+
+
+@transaction.atomic
+def add_channel_member(
+    *,
+    channel_id: str,
+    location: Location,
+    user,
+    held: set[str],
+    target_user_id: str,
+    role: str = CommunityChannelMember.Role.MEMBER,
+) -> dict[str, Any]:
+    channel = get_channel(channel_id)
+    _require_manage_channel(channel, location=location, user=user, held=held)
+
+    if not (target_user_id or "").strip():
+        raise ValidationError(
+            "user_id is required.",
+            details={"user_id": "required"},
+        )
+
+    parsed_role = _parse_member_role(role)
+    candidate_location = _candidate_location_for_channel(
+        channel, caller_location=location
+    )
+    membership = _require_location_member(
+        location=candidate_location, user_id=target_user_id
+    )
+
+    active = (
+        CommunityChannelMember.objects.filter(
+            channel=channel, user_id=membership.user_id, left_at__isnull=True
+        )
+        .select_related("user", "location")
+        .first()
+    )
+    if active:
+        if active.role != parsed_role:
+            active.role = parsed_role
+            active.save(update_fields=["role", "updated_at"])
+    else:
+        _ensure_active_member(
+            channel=channel,
+            user=membership.user,
+            location=candidate_location,
+            role=parsed_role,
+        )
+
+    return list_members(
+        channel_id=str(channel.id),
+        location=location,
+        user=user,
+        held=held,
+    )
+
+
+@transaction.atomic
+def update_channel_member_role(
+    *,
+    channel_id: str,
+    location: Location,
+    user,
+    held: set[str],
+    target_user_id: str,
+    role: str,
+) -> dict[str, Any]:
+    channel = get_channel(channel_id)
+    _require_manage_channel(channel, location=location, user=user, held=held)
+
+    parsed_role = _parse_member_role(role)
+
+    row = (
+        CommunityChannelMember.objects.filter(channel=channel, user_id=target_user_id)
+        .order_by("-created_at")
+        .select_related("user", "location")
+        .first()
+    )
+    if row is None:
+        raise NotFoundError("Channel member not found.")
+
+    if row.left_at is not None:
+        row.left_at = None
+        row.joined_at = timezone.now()
+        if row.location_id is None:
+            row.location = location
+    row.role = parsed_role
+    row.save(update_fields=["left_at", "joined_at", "location", "role", "updated_at"])
+
+    return list_members(
+        channel_id=str(channel.id),
+        location=location,
+        user=user,
+        held=held,
+    )
+
+
+@transaction.atomic
+def remove_channel_member(
+    *,
+    channel_id: str,
+    location: Location,
+    user,
+    held: set[str],
+    target_user_id: str,
+) -> dict[str, Any]:
+    channel = get_channel(channel_id)
+    _require_manage_channel(channel, location=location, user=user, held=held)
+
+    if str(target_user_id) == str(user.id):
+        raise ValidationError(
+            "You cannot remove yourself. Leave the channel instead.",
+            details={"user_id": "self_remove_denied"},
+        )
+
+    row = (
+        CommunityChannelMember.objects.filter(
+            channel=channel,
+            user_id=target_user_id,
+            left_at__isnull=True,
+        )
+        .select_related("user", "location")
+        .first()
+    )
+    if row is None:
+        raise NotFoundError("Channel member not found.")
+
+    row.left_at = timezone.now()
+    row.save(update_fields=["left_at", "updated_at"])
+
+    return list_members(
+        channel_id=str(channel.id),
+        location=location,
+        user=user,
+        held=held,
+    )
 
 
 def ensure_platform_seeds(*, created_by=None) -> dict[str, int]:
